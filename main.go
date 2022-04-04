@@ -85,6 +85,8 @@ func ListDirectory(ctx context.Context, curDir string, starterDir string, dLimit
 						if err != nil {
 							return nil, err
 						}
+					default:
+						continue
 					}
 
 				} else {
