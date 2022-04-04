@@ -70,11 +70,23 @@ func ListDirectory(ctx context.Context, curDir string, starterDir string, dLimit
 				fmt.Printf("Директория: %s, Глубина: %d", curDir, len(depthP))
 			default:
 				if entry.IsDir() {
-					child, err := ListDirectory(ctx, path, starterDir, dLimit) //Дополнительно: вынести в горутину
-					if err != nil {
-						return nil, err
+					listCh := make(chan error, 1)
+					go func() {
+						child, err := ListDirectory(ctx, path, starterDir, dLimit) //Дополнительно: вынести в горутину
+						if err != nil {
+							listCh <- err
+							return
+						}
+						result = append(result, child...)
+						listCh <- nil
+					}()
+					select {
+					case err := <-listCh:
+						if err != nil {
+							return nil, err
+						}
 					}
-					result = append(result, child...)
+
 				} else {
 					info, err := entry.Info()
 					if err != nil {
