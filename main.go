@@ -116,7 +116,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGUSR1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
 	//Обработать сигнал SIGUSR1
 	waitCh := make(chan struct{})
