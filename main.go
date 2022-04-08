@@ -12,13 +12,15 @@ import (
 	"time"
 
 	"practic/discovery"
+	"practic/reader"
 )
 
 func main() {
-	discovery := discovery.NewDiscovery()
-	const wantExt = ".go"
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	discovery := discovery.NewDiscovery(ctx, &reader.FSReader{})
+	const wantExt = ".go"
+
 	defer cancel()
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
@@ -26,7 +28,7 @@ func main() {
 	waitCh := make(chan struct{})
 	go func() {
 
-		res, err := discovery.FindFiles(ctx, wantExt)
+		res, err := discovery.FindFiles(wantExt)
 		if err != nil {
 			log.Printf("Error on search: %v\n", err)
 			os.Exit(1)
