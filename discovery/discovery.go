@@ -11,7 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/NuVeS/GB_march_best_practic-maxud-daudov/types"
+	"practic/types"
+
 	"go.uber.org/zap"
 )
 
@@ -82,7 +83,7 @@ func (d *Discovery) ListDirectory(ctx context.Context, curDir string, starterDir
 							zap.String("error", err.Error()))
 						return nil, err
 					}
-					d.log.Info("Got new children ", zap.String("path", path), zap.String("child", child[0].Path()))
+					d.log.Info("Got new children ", zap.String("path", path), zap.String("child", child[0].Path))
 					result = append(result, child...)
 				} else {
 					info, err := entry.Info()
@@ -119,7 +120,7 @@ func (d *Discovery) FindFiles(ctx context.Context, ext string) (types.FileList, 
 			d.log.Info("Adding file", zap.String("file", file.Name()))
 			fl[file.Name()] = types.TargetFile{
 				Name: file.Name(),
-				Path: file.Path(),
+				Path: file.Path,
 			}
 		}
 	}

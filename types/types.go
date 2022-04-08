@@ -13,18 +13,9 @@ type TargetFile struct {
 
 type FileList map[string]TargetFile
 
-type FileInfoType interface {
-	os.FileInfo
-	Path() string
-}
-
 type FileInfo struct {
 	os.FileInfo
-	path string
-}
-
-func (fi FileInfo) Path() string {
-	return fi.path
+	Path string
 }
 
 type Discovery struct {

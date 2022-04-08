@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/NuVeS/GB_march_best_practic-maxud-daudov/discovery"
+	"practic/discovery"
 )
 
 func main() {
