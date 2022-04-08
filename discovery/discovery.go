@@ -32,7 +32,6 @@ func NewDiscovery() *Discovery {
 	return d
 }
 
-//Ограничить глубину поиска заданым числом, по SIGUSR2 увеличить глубину поиска на +2
 func (d *Discovery) ListDirectory(ctx context.Context, curDir string, starterDir string, dLimit int) ([]types.FileInfo, error) {
 	d.log.Info("New direcotry check", zap.String("curDir", curDir), zap.Int("dLimit", dLimit))
 	sigCh := make(chan os.Signal, 1)
@@ -42,7 +41,6 @@ func (d *Discovery) ListDirectory(ctx context.Context, curDir string, starterDir
 		d.log.Info("Context finished in ListDirectory")
 		return nil, nil
 	default:
-		//По SIGUSR1 вывести текущую директорию и текущую глубину поиска
 		time.Sleep(time.Second * 10)
 		var result []types.FileInfo
 		res, err := os.ReadDir(curDir)
