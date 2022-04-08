@@ -1,8 +1,7 @@
-package discovery_test
+package discovery
 
 import (
 	"context"
-	"practic/discovery"
 	"practic/reader"
 	"testing"
 
@@ -13,15 +12,15 @@ func TestIsExceedLimit(t *testing.T) {
 	assert := assert.New(t)
 
 	ctx := context.Background()
-	d := discovery.NewDiscovery(ctx, &reader.FSReader{})
+	d := NewDiscovery(ctx, &reader.FSReader{})
 
-	dto := discovery.MethodDto{
+	dto := methodDto{
 		CurDir:     "/Users/m.daudov/Downloads/GB_march_best_practic-master/test/test",
 		StarterDir: "/Users/m.daudov/Downloads/GB_march_best_practic-master",
 		DLimit:     1,
 	}
 
-	res, depth, err := d.IsExceedLimit(dto)
+	res, depth, err := d.isExceedLimit(dto)
 	assert.Nil(err)
 	assert.True(res, "Res is: %v", res)
 	assert.Equal(7, depth, "Depth is: %d", depth)

@@ -12,7 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	"practic/reader"
 	"practic/types"
 
 	"go.uber.org/zap"
@@ -21,20 +20,22 @@ import (
 type Discovery struct {
 	log    *zap.Logger
 	ctx    context.Context
-	reader reader.Reader
+	reader Reader
 }
 
-type MethodDto struct {
+type Reader interface {
+	ReadDir(name string) ([]fs.DirEntry, error) // по хорошему нужно обертку сделать над FS, но как это
+	// сделать малой кровью не знаю
+	Getwd() (string, error)
+}
+
+type methodDto struct {
 	CurDir     string
 	StarterDir string
 	DLimit     int
 }
 
-func newDTO(parent MethodDto, curDir string) MethodDto {
-	return MethodDto{CurDir: curDir, StarterDir: parent.StarterDir, DLimit: parent.DLimit}
-}
-
-func NewDiscovery(ctx context.Context, reader reader.Reader) *Discovery {
+func NewDiscovery(ctx context.Context, reader Reader) *Discovery {
 	loggerConfig := zap.NewProductionConfig()
 	loggerConfig.EncoderConfig.TimeKey = "timestamp"
 	logger, err := loggerConfig.Build()
@@ -46,7 +47,37 @@ func NewDiscovery(ctx context.Context, reader reader.Reader) *Discovery {
 	return d
 }
 
-func (d *Discovery) IsExceedLimit(dto MethodDto) (bool, int, error) {
+func (d *Discovery) FindFiles(ext string) (types.FileList, error) {
+	wd, err := d.reader.Getwd()
+	if err != nil {
+		d.log.Error("couldnt get wd", zap.String("error", err.Error()))
+		return nil, err
+	}
+	dto := methodDto{CurDir: wd, StarterDir: wd, DLimit: 2}
+	files, err := d.listDirectory(dto)
+	if err != nil {
+		d.log.Error("couldnt get files from dir", zap.String("wd", wd),
+			zap.String("error", err.Error()))
+		return nil, err
+	}
+	fl := make(types.FileList, len(files))
+	for _, file := range files {
+		if filepath.Ext(file.Name()) == ext {
+			d.log.Info("Adding file", zap.String("file", file.Name()))
+			fl[file.Name()] = types.TargetFile{
+				Name: file.Name(),
+				Path: file.Path,
+			}
+		}
+	}
+	return fl, nil
+}
+
+func newDTO(parent methodDto, curDir string) methodDto {
+	return methodDto{CurDir: curDir, StarterDir: parent.StarterDir, DLimit: parent.DLimit}
+}
+
+func (d *Discovery) isExceedLimit(dto methodDto) (bool, int, error) {
 	fileP, err := filepath.Abs(dto.CurDir)
 	if err != nil {
 		d.log.Error("couldnt get path from curDir", zap.String("curDir", dto.CurDir),
@@ -69,7 +100,7 @@ func (d *Discovery) IsExceedLimit(dto MethodDto) (bool, int, error) {
 	return false, len(depthP), nil
 }
 
-func (d *Discovery) ListDirectory(dto MethodDto) ([]types.FileInfo, error) {
+func (d *Discovery) listDirectory(dto methodDto) ([]types.FileInfo, error) {
 	d.log.Info("New direcotry check", zap.String("curDir", dto.CurDir), zap.Int("dLimit", dto.DLimit))
 
 	select {
@@ -87,7 +118,7 @@ func (d *Discovery) ListDirectory(dto MethodDto) ([]types.FileInfo, error) {
 		for _, entry := range res {
 			path := filepath.Join(dto.CurDir, entry.Name())
 			childDto := newDTO(dto, path)
-			isExceed, curDepth, err := d.IsExceedLimit(childDto)
+			isExceed, curDepth, err := d.isExceedLimit(childDto)
 			if err != nil {
 				return nil, err
 			}
@@ -96,14 +127,14 @@ func (d *Discovery) ListDirectory(dto MethodDto) ([]types.FileInfo, error) {
 				d.log.Info("Depth limit reached", zap.Int("dLimit", dto.DLimit))
 				return result, nil
 			}
-			d.NewDirCheck(entry, dto, curDepth)
+			d.newDirCheck(entry, dto, curDepth)
 
 		}
 		return result, nil
 	}
 }
 
-func (d *Discovery) NewDirCheck(entry fs.DirEntry, dto MethodDto, curDepth int) []types.FileInfo {
+func (d *Discovery) newDirCheck(entry fs.DirEntry, dto methodDto, curDepth int) []types.FileInfo {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGUSR1)
 	path := filepath.Join(dto.CurDir, entry.Name())
@@ -115,7 +146,7 @@ func (d *Discovery) NewDirCheck(entry fs.DirEntry, dto MethodDto, curDepth int) 
 		if entry.IsDir() {
 			d.log.Info("Starting new list directory", zap.String("path", path))
 			childDto := newDTO(dto, path)
-			child, err := d.ListDirectory(childDto)
+			child, err := d.listDirectory(childDto)
 			if err != nil {
 				d.log.Error("couldnt start new list directory ", zap.String("path", dto.StarterDir),
 					zap.Int("dLimit", dto.DLimit),
@@ -139,30 +170,4 @@ func (d *Discovery) NewDirCheck(entry fs.DirEntry, dto MethodDto, curDepth int) 
 		}
 	}
 	return []types.FileInfo{}
-}
-
-func (d *Discovery) FindFiles(ext string) (types.FileList, error) {
-	wd, err := d.reader.Getwd()
-	if err != nil {
-		d.log.Error("couldnt get wd", zap.String("error", err.Error()))
-		return nil, err
-	}
-	dto := MethodDto{CurDir: wd, StarterDir: wd, DLimit: 2}
-	files, err := d.ListDirectory(dto)
-	if err != nil {
-		d.log.Error("couldnt get files from dir", zap.String("wd", wd),
-			zap.String("error", err.Error()))
-		return nil, err
-	}
-	fl := make(types.FileList, len(files))
-	for _, file := range files {
-		if filepath.Ext(file.Name()) == ext {
-			d.log.Info("Adding file", zap.String("file", file.Name()))
-			fl[file.Name()] = types.TargetFile{
-				Name: file.Name(),
-				Path: file.Path,
-			}
-		}
-	}
-	return fl, nil
 }
