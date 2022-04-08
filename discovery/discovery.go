@@ -3,6 +3,7 @@ package discovery
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"os/signal"
@@ -32,10 +33,32 @@ func NewDiscovery() *Discovery {
 	return d
 }
 
+func (d *Discovery) isExceedLimit(curDir string, starterDir string, dLimit int) (bool, int, error) {
+	fileP, err := filepath.Abs(curDir)
+	if err != nil {
+		d.log.Error("couldnt get path from curDir", zap.String("curDir", curDir),
+			zap.String("error", err.Error()))
+		return false, 0, err
+	}
+	fileP2, err := filepath.Abs(starterDir)
+	if err != nil {
+		d.log.Error("couldnt get path from starterDir", zap.String("starterDir", starterDir),
+			zap.String("starterDirror", err.Error()))
+		return false, 0, err
+	}
+	depthP := strings.Split(fileP, "\\")
+	depthStart := strings.Split(fileP2, "\\")
+	if len(depthP)-len(depthStart) > dLimit {
+		d.log.Info("Depth limit reached", zap.Int("dLimit", dLimit))
+		return true, len(depthP), nil
+	}
+
+	return false, len(depthP), nil
+}
+
 func (d *Discovery) ListDirectory(ctx context.Context, curDir string, starterDir string, dLimit int) ([]types.FileInfo, error) {
 	d.log.Info("New direcotry check", zap.String("curDir", curDir), zap.Int("dLimit", dLimit))
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGUSR1)
+
 	select {
 	case <-ctx.Done():
 		d.log.Info("Context finished in ListDirectory")
@@ -50,54 +73,57 @@ func (d *Discovery) ListDirectory(ctx context.Context, curDir string, starterDir
 		}
 		for _, entry := range res {
 			path := filepath.Join(curDir, entry.Name())
-			fileP, err := filepath.Abs(path)
+			isExceed, curDepth, err := d.isExceedLimit(path, starterDir, dLimit)
 			if err != nil {
-				d.log.Error("couldnt get path from curDir", zap.String("curDir", curDir),
-					zap.String("error", err.Error()))
 				return nil, err
 			}
-			fileP2, err := filepath.Abs(starterDir)
-			if err != nil {
-				d.log.Error("couldnt get path from starterDir", zap.String("starterDir", starterDir),
-					zap.String("erstarterDirror", err.Error()))
-				return nil, err
-			}
-			depthP := strings.Split(fileP, "\\")
-			depthStart := strings.Split(fileP2, "\\")
-			if len(depthP)-len(depthStart) > dLimit {
+
+			if isExceed {
 				d.log.Info("Depth limit reached", zap.Int("dLimit", dLimit))
 				return result, nil
 			}
-			select {
-			case <-sigCh:
-				fmt.Printf("Директория: %s, Глубина: %d", curDir, len(depthP))
-			default:
-				if entry.IsDir() {
-					d.log.Info("Starting new list directory", zap.String("path", path))
-					child, err := d.ListDirectory(ctx, path, starterDir, dLimit) //Дополнительно: вынести в горутину
-					if err != nil {
-						d.log.Error("couldnt start new listdirectory ", zap.String("path", starterDir),
-							zap.Int("dLimit", dLimit),
-							zap.String("error", err.Error()))
-						return nil, err
-					}
-					d.log.Info("Got new children ", zap.String("path", path), zap.String("child", child[0].Path))
-					result = append(result, child...)
-				} else {
-					info, err := entry.Info()
-					if err != nil {
-						d.log.Error("couldnt get file info ", zap.String("filename", entry.Name()),
-							zap.String("error", err.Error()))
-						return nil, err
-					}
-					d.log.Info("Got new children ", zap.String("path", path), zap.String("path", path))
-					result = append(result, types.FileInfo{info, path})
-				}
-			}
+			d.newDirCheck(ctx, entry, curDir, starterDir, curDepth, dLimit)
 
 		}
 		return result, nil
 	}
+}
+
+func (d *Discovery) newDirCheck(ctx context.Context, entry fs.DirEntry, curDir string, starterDir string, curDepth int, dLimit int) []types.FileInfo {
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGUSR1)
+	path := filepath.Join(curDir, entry.Name())
+
+	select {
+	case <-sigCh:
+		fmt.Printf("Директория: %s, Глубина: %d", curDir, curDepth)
+	default:
+		if entry.IsDir() {
+			d.log.Info("Starting new list directory", zap.String("path", path))
+			child, err := d.ListDirectory(ctx, path, starterDir, dLimit)
+			if err != nil {
+				d.log.Error("couldnt start new listdirectory ", zap.String("path", starterDir),
+					zap.Int("dLimit", dLimit),
+					zap.String("error", err.Error()))
+				return []types.FileInfo{}
+			}
+			if len(child) > 0 {
+				d.log.Info("Got new children ", zap.String("path", path), zap.String("child", child[0].Path))
+			}
+
+			return child
+		} else {
+			info, err := entry.Info()
+			if err != nil {
+				d.log.Error("couldnt get file info ", zap.String("filename", entry.Name()),
+					zap.String("error", err.Error()))
+				return []types.FileInfo{}
+			}
+			d.log.Info("Got new children ", zap.String("path", path), zap.String("path", path))
+			return []types.FileInfo{types.FileInfo{info, path}}
+		}
+	}
+	return []types.FileInfo{}
 }
 
 func (d *Discovery) FindFiles(ctx context.Context, ext string) (types.FileList, error) {
