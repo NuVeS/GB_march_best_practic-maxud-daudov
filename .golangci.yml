@@ -1,0 +1,15 @@
+# Options for analysis running.
+run:
+  concurrency: 4
+  timeout: 1m
+  issues-exit-code: 2
+  tests: false
+  skip-files:
+    - ".*"
+  allow-parallel-runners: true
+  go: '1.17'
+linters:
+  enable-all: true
+  disable:
+    - govet
+  fast: true
