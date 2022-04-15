@@ -15,7 +15,12 @@ import (
 	"practic/reader"
 )
 
+var (
+	buildCommit = "UNKNOWN"
+)
+
 func main() {
+	fmt.Println(buildCommit)
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	discovery := discovery.NewDiscovery(ctx, &reader.FSReader{})
