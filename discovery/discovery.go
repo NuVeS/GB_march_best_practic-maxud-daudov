@@ -166,7 +166,7 @@ func (d *Discovery) newDirCheck(entry fs.DirEntry, dto methodDto, curDepth int) 
 				return []types.FileInfo{}
 			}
 			d.log.Info("Got new children ", zap.String("path", path), zap.String("path", path))
-			fileInfo := types.FileInfo{info, path}
+			fileInfo := types.FileInfo{FileInfo: info, Path: path}
 			return []types.FileInfo{fileInfo}
 		}
 	}
